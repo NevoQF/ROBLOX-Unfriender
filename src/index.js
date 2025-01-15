@@ -1,6 +1,7 @@
 const conf = require('./config.js');
 const fs = require('fs');
 const noblox = require('noblox.js');
+const fetch = require('node-fetch');
 const configPath = './config.json';
 
 let run = true;
@@ -14,25 +15,45 @@ if (conf.ROBLOX_COOKIE.trim() === '') {
   if (!run) return;
   try {
     const currentUser = await noblox.setCookie(conf.ROBLOX_COOKIE);
-    console.log(`Logged in as ${currentUser}`);
+    console.log(`Logged in as ${currentUser.name}`);
 
-    const friends = await noblox.getFriends(currentUser.id);
-    const friendIds = friends.data.map(friend => friend.id);
+    let friendIds = [];
+    let nextCursor = null;
+
+    do {
+      let url = `https://friends.roblox.com/v1/users/${currentUser.id}/friends/find`;
+      if (nextCursor) {
+        url += `?cursor=${nextCursor}`;
+      }
+
+      const response = await fetch(url, {
+        headers: {
+          cookie: `.ROBLOSECURITY=${conf.ROBLOX_COOKIE}`,
+          'Content-Type': 'application/json',
+        },
+      });
+
+      const friendData = await response.json();
+      friendIds.push(...friendData.PageItems.map(item => item.id));
+      nextCursor = friendData.NextCursor;
+    } while (nextCursor);
 
     const config = JSON.parse(fs.readFileSync(configPath, 'utf8'));
     const existingFriends = config.Friends || [];
 
     if (existingFriends.length === 0) {
-      console.log('Friends list is empty. Updating with current friends...');
+      console.log(`Friends list is empty. Updating with ${friendIds.length} current friends...`);
       config.Friends = friendIds;
       fs.writeFileSync(configPath, JSON.stringify(config, null, 2), 'utf8');
       console.log('Config updated with current friends.');
     } else {
       const newFriends = friendIds.filter(id => !existingFriends.includes(id));
-      console.log(friendIds)
+
       if (newFriends.length > 0) {
-        console.log(`Removing ${newFriends.length} new friends.`);
-        newFriends.forEach(id => noblox.removeFriend(id));
+        console.log(`Removing ${newFriends.length} new friends...`);
+        for (const id of newFriends) {
+          await noblox.removeFriend(id);
+        }
       } else {
         console.log('No new friends to unfriend.');
       }
