@@ -1,7 +1,7 @@
 const conf = require('./config.js');
 const fs = require('fs');
 const noblox = require('noblox.js');
-const fetch = require('node-fetch');
+const axios = require('axios');
 const configPath = './config.json';
 
 let run = true;
@@ -26,14 +26,14 @@ if (conf.ROBLOX_COOKIE.trim() === '') {
         url += `?cursor=${nextCursor}`;
       }
 
-      const response = await fetch(url, {
+      const response = await axios.get(url, {
         headers: {
           cookie: `.ROBLOSECURITY=${conf.ROBLOX_COOKIE}`,
           'Content-Type': 'application/json',
         },
       });
 
-      const friendData = await response.json();
+      const friendData = response.data;
       friendIds.push(...friendData.PageItems.map(item => item.id));
       nextCursor = friendData.NextCursor;
     } while (nextCursor);
